@@ -1,0 +1,17 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+
+# dirs
+notebooks/vit/
+notebooks/gemma/
+notebooks/DL_project_experiment_1.ipynb
+notebooks/experiment-1.ipynb
