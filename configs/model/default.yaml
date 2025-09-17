@@ -1,0 +1,6 @@
+gemma_id: google/gemma-3-270m
+vit_id: facebook/dinov3-vits16plus-pretrain-lvd1689m
+include_cls: true
+include_registers: false
+include_patches: false
+freeze_gemma: true

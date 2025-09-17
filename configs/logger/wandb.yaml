@@ -1,0 +1,5 @@
+wandb:
+  enabled: true
+  entity: divyanshukla
+  project: DinoGemmaCaptioner
+  run_name: ${env.experiment_name}

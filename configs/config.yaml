@@ -1,0 +1,12 @@
+defaults:
+  - env: default
+  - data: default
+  - model: default
+  - optimizer: adamw
+  - trainer: default
+  - logger: wandb
+  - _self_
+
+hydra:
+  run:
+    dir: ${env.output_dir}

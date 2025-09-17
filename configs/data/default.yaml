@@ -1,0 +1,9 @@
+train_split: train
+val_split: validation
+num_workers: 2
+batch_size: 2
+val_batch_size: 2
+shuffle: true
+pin_memory: true
+use_val: true
+caption_index:

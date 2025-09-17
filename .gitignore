@@ -13,5 +13,15 @@ wheels/
 # dirs
 notebooks/vit/
 notebooks/gemma/
+wandb/
+
+#notebooks
 notebooks/DL_project_experiment_1.ipynb
 notebooks/experiment-1.ipynb
+
+#scripts
+scripts/wandb_project_init.py
+
+#models and data
+experiments/
+tests/lightning_logs

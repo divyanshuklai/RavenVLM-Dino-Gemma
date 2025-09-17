@@ -105,6 +105,11 @@ class GemmaDinoImageCaptioner(nn.Module):
         eoi = (self.gemma.get_input_embeddings()(torch.tensor([self.gemma_tokenizer.eoi_token_id], device=device))).unsqueeze(0).expand(image_embed.shape[0], 1, image_embed.shape[2])
         image_embed = torch.cat([boi, image_embed, eoi], dim=1)
 
+        dummy_id = torch.tensor([self.gemma_tokenizer.bos_token_id], device=device)
+        dummy_embed = self.gemma.get_input_embeddings()(dummy_id).unsqueeze(0).expand(image_embed.shape[0], 1, image_embed.shape[2])
+
+        image_embed = torch.cat([dummy_embed, image_embed], dim=1)
+
         #tokenize captions
         caps = self.gemma_tokenizer(captions, return_tensors="pt", padding=True)
         caption_ids = caps["input_ids"].to(device)
@@ -141,17 +146,21 @@ class GemmaDinoImageCaptioner(nn.Module):
         vit_selected = self._select_vit_tokens(vit_out)
 
         #convert for Language model
-        image_embed = self.adapter()
+        image_embed = self.adapter(vit_selected)
 
         boi = (self.gemma.get_input_embeddings()(torch.tensor([self.gemma_tokenizer.boi_token_id], device=device))).unsqueeze(0).expand(image_embed.shape[0], 1, image_embed.shape[2])
         eoi = (self.gemma.get_input_embeddings()(torch.tensor([self.gemma_tokenizer.eoi_token_id], device=device))).unsqueeze(0).expand(image_embed.shape[0], 1, image_embed.shape[2])
         
         image_embed = torch.cat([boi, image_embed, eoi], dim=1)
 
-        attention_mask = torch.ones(image_embed[0], image_embed[1], dtype=torch.long, device=device)
+        # Build BOS embedding and prepend to image embeddings; use inputs_embeds-only API
+        bos_id = torch.tensor([self.gemma_tokenizer.bos_token_id], device=device)
+        bos_embed = self.gemma.get_input_embeddings()(bos_id).unsqueeze(0).expand(image_embed.shape[0], 1, image_embed.shape[2])
+        seq_embeds = torch.cat([bos_embed, image_embed], dim=1)
+        attention_mask = torch.ones(seq_embeds.shape[0], seq_embeds.shape[1], dtype=torch.long, device=device)
 
-        gen = self.gemma.generate_batch(
-            input_embeds=image_embed,
+        gen = self.gemma.generate(
+            inputs_embeds=seq_embeds,
             attention_mask=attention_mask,
             max_new_tokens=max_new_tokens,
             do_sample=(temperature>0),
