@@ -1,0 +1,29 @@
+# Venvs and caches
+.venv/
+**/__pycache__/
+.pytest_cache/
+.cache/
+
+# Training outputs and logs
+outputs/
+wandb/
+experiments/
+checkpoints/
+**/*.ckpt
+
+# Datasets and weights
+data/
+datasets/
+**/*.pt
+**/*.pth
+**/*.bin
+**/*.safetensors
+**/*.tar
+**/*.zip
+**/*.gz
+**/*.jpg
+**/*.png
+
+# Git and IDE
+.git/
+*.ipynb_checkpoints/
