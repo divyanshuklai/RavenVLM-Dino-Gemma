@@ -19,7 +19,7 @@ class LitCaptioner(pl.LightningModule):
         out = self.model(images, captions) 
         loss = out.loss if hasattr(out, "loss") else out["loss"]
 
-        bsz = len(images)
+        bsz = images.shape[0]
         self.log("train/loss", loss, prog_bar=True, on_step=True, on_epoch=True, batch_size=bsz)
         return loss
 
@@ -28,7 +28,7 @@ class LitCaptioner(pl.LightningModule):
         out = self.model(images, captions)
         val_loss = out.loss if hasattr(out, "loss") else len(images)
 
-        bsz = len(images)
+        bsz = images.shape[0]
         self.log("val/loss", val_loss, prog_bar=True, on_epoch=True, batch_size=bsz)
 
     def configure_optimizers(self):
@@ -68,6 +68,8 @@ def _build_model(cfg: DictConfig) -> nn.Module:
 def _get_dataloaders(cfg: DictConfig):
     from src.data.dataloader import make_coco_dataloader
     train_loader = make_coco_dataloader(
+        gemma_id=cfg.model.gemma_id,
+        vit_id=cfg.model.vit_id,
         split=cfg.data.train_split,
         batch_size=cfg.data.batch_size,
         shuffle=cfg.data.shuffle,
@@ -80,6 +82,8 @@ def _get_dataloaders(cfg: DictConfig):
     val_loader = None
     if cfg.data.use_val:
         val_loader = make_coco_dataloader(
+            gemma_id=cfg.model.gemma_id,
+            vit_id=cfg.model.vit_id,
             split=cfg.data.val_split,
             batch_size=cfg.data.val_batch_size,
             shuffle=False,

@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 
 import datasets as hfds
+from transformers import AutoTokenizer, AutoImageProcessor
 
 class CocoCaptions(torch.utils.data.Dataset):
     """
@@ -12,7 +13,11 @@ class CocoCaptions(torch.utils.data.Dataset):
     - caption_index: 0..4 for deterministic choice, or None for random choice from sentences_raw
     - seed: controls the per-sample random caption selection when caption_index is None
     """
-    def __init__(self, split="train", caption_index=None, seed=None, cache_dir=None):
+    def __init__(self, gemma_id, vit_id, split="train", caption_index=None, seed=None, cache_dir=None):
+
+        self.gemma_tokenizer = AutoTokenizer.from_pretrained(gemma_id)
+        self.vit_processor = AutoImageProcessor.from_pretrained(vit_id)
+
         ds = hfds.load_dataset(f"Multimodal-Fatima/COCO_captions_{split}", cache_dir=cache_dir)
         self.ds = ds[split]
         self.caption_index = caption_index
@@ -32,16 +37,20 @@ class CocoCaptions(torch.utils.data.Dataset):
             caption = caps[self.rng.randrange(len(caps))]
         else:
             caption = caps[self.caption_index]
+
+        image = self.vit_processor(image, return_tensors="pt")["pixel_values"]
+
         return image, caption
 
 
 def coco_collate(batch):
-    images = [img.convert('RGB') if hasattr(img, "mode") and img.mode != 'RGB' else img for img, _ in batch]
-    captions = [cap for _, cap in batch]
-    return images, captions
+    images, captions = zip(*batch)
+    return torch.stack(images), list(captions)
 
 
 def make_coco_dataloader(
+    gemma_id,
+    vit_id,
     split="train",
     batch_size=8,
     shuffle=None,
@@ -56,7 +65,7 @@ def make_coco_dataloader(
     split, caption_index, seed and cache_dir sent to CocoCaptions Dataset class.
     rest used in DataLoader.
     """
-    dataset = CocoCaptions(split=split, caption_index=caption_index, seed=seed, cache_dir=cache_dir)
+    dataset = CocoCaptions(gemma_id, vit_id, split=split, caption_index=caption_index, seed=seed, cache_dir=cache_dir)
     if shuffle is None:
         shuffle = split == "train"
     return torch.utils.data.DataLoader(
