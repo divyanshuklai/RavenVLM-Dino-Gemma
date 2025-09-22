@@ -19,16 +19,16 @@ class LitCaptioner(pl.LightningModule):
         out = self.model(images, captions) 
         loss = out.loss if hasattr(out, "loss") else out["loss"]
 
-        bsz = images.shape[0] if hasattr(images, "shape") else out["loss"]
+        bsz = len(images)
         self.log("train/loss", loss, prog_bar=True, on_step=True, on_epoch=True, batch_size=bsz)
         return loss
 
     def validation_step(self, batch, batch_idx: int):
         images, captions = batch
         out = self.model(images, captions)
-        val_loss = out.loss if hasattr(out, "loss") else out["loss"]
+        val_loss = out.loss if hasattr(out, "loss") else len(images)
 
-        bsz = images.shape[0] if hasattr(images, "shape") else len(images)
+        bsz = len(images)
         self.log("val/loss", val_loss, prog_bar=True, on_epoch=True, batch_size=bsz)
 
     def configure_optimizers(self):

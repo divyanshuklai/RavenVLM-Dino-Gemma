@@ -15,10 +15,12 @@ if project_root not in sys.path:
 
 from src.utils.training import LitCaptioner, _setup_env, _build_model, _get_dataloaders
 
+OmegaConf.register_new_resolver("div", lambda a, b: int(a) // int(b))
 
 @hydra.main(config_path="../../configs", config_name="config", version_base="1.3")
 def main(cfg: DictConfig):
     print(OmegaConf.to_yaml(cfg))
+
     _setup_env(cfg)
     pl.seed_everything(int(cfg.env.seed), workers=True)
 
@@ -36,7 +38,6 @@ def main(cfg: DictConfig):
             log_model=False,
         )
 
-
         hparams = OmegaConf.to_container(cfg, resolve=True)
         logger.log_hyperparams(hparams)
 
@@ -50,7 +51,7 @@ def main(cfg: DictConfig):
             save_last=True,
             monitor="val/loss",
             mode="min",
-            every_n_epochs=1,
+            every_n_train_steps=cfg.trainer.ckpt_every_n_train_steps,
         )
     else:
         ckpt_cb = ModelCheckpoint(
@@ -58,7 +59,7 @@ def main(cfg: DictConfig):
             filename=f"{cfg.env.experiment_name}" + "-{epoch:02d}",
             save_top_k=0,
             save_last=True,
-            every_n_epochs=1,
+            every_n_train_steps=cfg.trainer.ckpt_every_n_train_steps,
         )
     lr_cb = LearningRateMonitor(logging_interval="step")
 
@@ -71,6 +72,7 @@ def main(cfg: DictConfig):
         max_steps=cfg.trainer.max_steps,
         accumulate_grad_batches=cfg.trainer.accumulate_grad_batches,
         precision=precision,
+        gradient_clip_val=cfg.trainer.gradient_clip_val,
         logger=logger,
         callbacks=[ckpt_cb, lr_cb],
         log_every_n_steps=cfg.trainer.log_every_n_steps,

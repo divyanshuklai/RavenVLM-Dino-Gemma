@@ -122,6 +122,9 @@ class GemmaDinoImageCaptioner(nn.Module):
 
         labels = torch.full((new_embeds.shape[0], new_embeds.shape[1]), -100, dtype=torch.long, device=device)
         labels[:, image_embed.shape[1]:] = caption_ids
+        if (labels != -100).sum().item() == 0:
+            raise RuntimeError("All targets are -100 (no supervision) — check tokenizer/padding.")
+
 
         #return outputs
         outputs = self.gemma(inputs_embeds=new_embeds, attention_mask=new_mask, labels=labels)

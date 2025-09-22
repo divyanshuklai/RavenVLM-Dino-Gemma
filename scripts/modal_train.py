@@ -1,18 +1,19 @@
 import os
 import itertools
 import subprocess
-import time
 import modal
+
 from pathlib import Path
 
+
 HF_VOL = modal.Volume.from_name("hf-cache", create_if_missing=True)
-EXP_VOL = modal.Volume.from_name("experiments-vol", create_if_missing=True)
+EXP_VOL = modal.Volume.from_name("experiments", create_if_missing=True)
 
 image = (
     modal.Image.debian_slim(python_version="3.13")
     .apt_install("git")
     .pip_install(
-        # deps from pyproject
+        # deps from pyproject + additional
         "accelerate>=1.10.1",
         "datasets>=4.0.0",
         "evaluate>=0.4.5",
@@ -28,25 +29,13 @@ image = (
         "transformers>=4.56.0",
         "trl>=0.22.2",
         "wandb>=0.21.4",
-        # use uv to mirror local launcher behavior
         "uv>=0.4.0",
         "hf_transfer>=0.1.6",
     )
 )
 
 project_root = Path(__file__).resolve().parent.parent
-# ...existing code...
-# Removed duplicate assignment:
-# project_root = Path(__file__).resolve().parent.parent
 
-# Remove the broad add_local_dir of the whole repo
-# image = image.add_local_dir(
-#     project_root,
-#     remote_path="/workspace/",
-#     ignore=[".git",".venv","**/__pycache__", ".pytest_cache", "wandb", "outputs"]
-# )
-
-# Add only what’s needed for training
 image = image.add_local_dir(
     project_root / "src",
     remote_path="/workspace/src",
@@ -65,7 +54,9 @@ image = image.add_local_dir(
 app = modal.App("captioner-hparam-sweep")
 
 def _to_hydra_value(v):
-    if isinstance(v, bool):
+    if v is None:
+        return "null"
+    elif isinstance(v, bool):
         return "true" if v else "false"
     return str(v)
 
@@ -76,7 +67,7 @@ def _to_hydra_value(v):
     timeout=60 * 60 * 6,
     secrets=[modal.Secret.from_name("huggingface-secret"), modal.Secret.from_name("wandb-secret")]
 )
-def train_one(overrides: dict):
+def train_one(overrides):
     # HF + logging env
     os.environ.setdefault("HF_HOME", "/cache/hf")
     os.environ.setdefault("HF_DATASETS_CACHE", "/cache/hf")
@@ -88,15 +79,14 @@ def train_one(overrides: dict):
     os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "1")
     os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 
-    # Disable W&B unless you pass a valid WANDB_API_KEY via secret
-    os.environ.setdefault("WANDB_MODE", "enabled")
+    os.environ.setdefault("WANDB_MODE", "online")
     os.environ.setdefault("WANDB_DIR", "/workspace/experiments")
 
     # Build Hydra CLI overrides
     hydra_args = [f"{k}={_to_hydra_value(v)}" for k, v in overrides.items()]
     # Only set a default experiment name if not provided
     if "env.experiment_name" not in overrides:
-        hydra_args.append("env.experiment_name=sweep")
+        hydra_args.append("env.experiment_name=modal_debug")
 
     # Use plain Python; uv --system isn't supported in this image
     cmd = ["python", "-u", "/workspace/src/engine/train.py", *hydra_args]
@@ -106,19 +96,32 @@ def train_one(overrides: dict):
 
 @app.local_entrypoint()
 def sweep():
-    grid = {
-        "optimizer.lr": [5e-5, 1e-5, 1e-4],
-        "data.batch_size": [2, 4],
-        "model.include_patches": [False, True],
+
+    common_ovr = {
+        "trainer.max_steps":100,
+        "trainer.val_check_interval":10,
+        "logger.wandb.enabled":True,
+        "trainer.log_every_n_steps":1,
     }
 
-    stamp = int(time.time())
+    grid = {
+        "optimizer.lr": [5e-5, 1e-5],
+        "data.batch_size": [4, 8],
+        "model.include_patches": [False],
+        "trainer.amp":[False],
+        "trainer.gradient_clip_val":[1.0, 10.0],
+    }
+
+    from datetime import datetime
+    stamp = datetime.now().strftime("%d-%m-%Y_%H%M")
     runs = []
     for values in itertools.product(*grid.values()):
         ovr = dict(zip(grid.keys(), values))
-        ovr["env.experiment_name"] = f"sweeps/{stamp}"
+        ovr["env.experiment_name"] = f"{stamp}/{stamp}_run_{len(runs)}"
+        ovr.update(common_ovr)
         runs.append(ovr)
 
-    # Run one locally for quick smoke test
     # Fan out on Modal:
     list(train_one.map(runs))
+
+    print(f"THIS SWEEP WAS : {stamp}")
