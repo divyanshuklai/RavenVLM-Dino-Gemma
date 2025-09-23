@@ -82,13 +82,8 @@ def train_one(overrides):
     os.environ.setdefault("WANDB_MODE", "online")
     os.environ.setdefault("WANDB_DIR", "/workspace/experiments")
 
-    # Build Hydra CLI overrides
     hydra_args = [f"{k}={_to_hydra_value(v)}" for k, v in overrides.items()]
-    # Only set a default experiment name if not provided
-    if "env.experiment_name" not in overrides:
-        hydra_args.append("env.experiment_name=modal_debug")
 
-    # Use plain Python; uv --system isn't supported in this image
     cmd = ["python", "-u", "/workspace/src/engine/train.py", *hydra_args]
 
     print("Launching:", " ".join(cmd))
@@ -98,18 +93,21 @@ def train_one(overrides):
 def sweep():
 
     common_ovr = {
-        "trainer.max_steps":100,
-        "trainer.val_check_interval":10,
+        "trainer.max_steps":10_000,
+        "trainer.val_check_interval":5_000,
         "logger.wandb.enabled":True,
-        "trainer.log_every_n_steps":1,
+        "trainer.log_every_n_steps":5,
+        "trainer.amp":False,
+        "data.num_workers":8,
     }
 
     grid = {
-        "optimizer.lr": [5e-5, 1e-5],
-        "data.batch_size": [4, 8],
+        "optimizer.lr": [5e-5],
+        "data.batch_size": [4],
         "model.include_patches": [False],
-        "trainer.amp":[False],
-        "trainer.gradient_clip_val":[1.0, 10.0],
+        "model.include_registers":[True, False],
+        "trainer.gradient_clip_val":[1.0],
+
     }
 
     from datetime import datetime
@@ -117,7 +115,10 @@ def sweep():
     runs = []
     for values in itertools.product(*grid.values()):
         ovr = dict(zip(grid.keys(), values))
-        ovr["env.experiment_name"] = f"{stamp}/{stamp}_run_{len(runs)}"
+        run_name = f"{stamp}_run_{len(runs)}"
+        ovr["env.experiment_name"] = run_name
+        ovr["env.output_dir"] = f"experiments/{stamp}/{run_name}"
+        ovr["logger.wandb.group"] = f"{stamp}"
         ovr.update(common_ovr)
         runs.append(ovr)
 

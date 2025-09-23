@@ -4,3 +4,4 @@ include_cls: true
 include_registers: false
 include_patches: false
 freeze_gemma: true
+max_caption_length: 64

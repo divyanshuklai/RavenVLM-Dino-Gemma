@@ -1,12 +1,13 @@
 import torch
 import torch.nn as nn
-from transformers import AutoModelForCausalLM, AutoTokenizer, AutoImageProcessor, AutoModel
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModel
 
 
 class GemmaDinoImageCaptioner(nn.Module):
     def __init__(self,
                  gemma_id="google/gemma-3-270m",
-                 vit_id="facebook/dinov3-vits16plus-pretrain-lvd1689m", 
+                 vit_id="facebook/dinov3-vits16plus-pretrain-lvd1689m",
+                 max_caption_length=64, 
                  include_cls=True,
                  include_registers=False, 
                  include_patches=False,
@@ -28,6 +29,8 @@ class GemmaDinoImageCaptioner(nn.Module):
         self.include_cls = include_cls
         self.include_registers = include_registers
         self.include_patches = include_patches
+
+        self.max_caption_length = max_caption_length
 
         self.gemma_tokenizer = AutoTokenizer.from_pretrained(gemma_id)
 
@@ -62,10 +65,9 @@ class GemmaDinoImageCaptioner(nn.Module):
             parameter.requires_grad = True
 
 
-        self.boi = self.gemma.get_input_embeddings()(torch.tensor([self.gemma_tokenizer.boi_token_id])).unsqueeze(0)
-        self.eoi = self.gemma.get_input_embeddings()(torch.tensor([self.gemma_tokenizer.eoi_token_id])).unsqueeze(0)
-        dummy_id = torch.tensor([self.gemma_tokenizer.bos_token_id])
-        self.dummy_embed = self.gemma.get_input_embeddings()(dummy_id).unsqueeze(0)
+        self.register_buffer("_boi_embed", None, persistent=False)
+        self.register_buffer("_eoi_embed", None, persistent=False)
+        self.register_buffer("_bos_embed", None, persistent=False)
 
     def _select_vit_tokens(self, vit_out):
         """
@@ -92,6 +94,14 @@ class GemmaDinoImageCaptioner(nn.Module):
         #set device
         device = next(self.adapter.parameters()).device
 
+        if self._boi_embed is None:
+            self._boi_embed = (self.gemma.get_input_embeddings()(torch.tensor([self.gemma_tokenizer.boi_token_id], device=device, dtype=torch.long))).unsqueeze(0)
+        if self._eoi_embed is None:
+            self._eoi_embed = (self.gemma.get_input_embeddings()(torch.tensor([self.gemma_tokenizer.eoi_token_id], device=device, dtype=torch.long))).unsqueeze(0)
+        if self._bos_embed is None:
+            self._bos_embed = (self.gemma.get_input_embeddings()(torch.tensor([self.gemma_tokenizer.bos_token_id], device=device, dtype=torch.long))).unsqueeze(0)
+        
+
         with torch.no_grad():
             vit_out = self.vit(images).last_hidden_state
         
@@ -100,17 +110,21 @@ class GemmaDinoImageCaptioner(nn.Module):
         #convert for Language model
         image_embed = self.adapter(vit_selected)
 
-        boi = self.boi.to(device).expand(image_embed.shape[0], 1, image_embed.shape[2])
-        eoi = self.eoi.to(device).expand(image_embed.shape[0], 1, image_embed.shape[2])
+        boi = self._boi_embed.to(device).expand(image_embed.shape[0], 1, image_embed.shape[2])
+        eoi = self._eoi_embed.to(device).expand(image_embed.shape[0], 1, image_embed.shape[2])
         image_embed = torch.cat([boi, image_embed, eoi], dim=1)
 
         
-        dummy_embed = self.dummy_embed.to(device).expand(image_embed.shape[0], 1, image_embed.shape[2])
+        bos_embed = self._bos_embed.to(device).expand(image_embed.shape[0], 1, image_embed.shape[2])
 
-        image_embed = torch.cat([dummy_embed, image_embed], dim=1)
+        image_embed = torch.cat([bos_embed, image_embed], dim=1)
 
         #tokenize captions
-        caps = self.gemma_tokenizer(captions, return_tensors="pt", padding="max_length",truncation=True,max_length=64)
+        caps = self.gemma_tokenizer(captions, 
+                                    return_tensors="pt", 
+                                    padding="max_length",
+                                    truncation=True,
+                                    max_length=self.max_caption_length)
         caption_ids = caps["input_ids"].to(device)
         attn_mask = caps["attention_mask"].to(device)
 
@@ -139,6 +153,13 @@ class GemmaDinoImageCaptioner(nn.Module):
         :returns gen: generated text 
         """
         device = next(self.adapter.parameters()).device
+
+        if self._boi_embed is None:
+            self._boi_embed = (self.gemma.get_input_embeddings()(torch.tensor([self.gemma_tokenizer.boi_token_id], device=device, dtype=torch.long))).unsqueeze(0)
+        if self._eoi_embed is None:
+            self._eoi_embed = (self.gemma.get_input_embeddings()(torch.tensor([self.gemma_tokenizer.eoi_token_id], device=device, dtype=torch.long))).unsqueeze(0)
+        if self._bos_embed is None:
+            self._bos_embed = (self.gemma.get_input_embeddings()(torch.tensor([self.gemma_tokenizer.bos_token_id], device=device, dtype=torch.long))).unsqueeze(0)
         
         with torch.no_grad():
             vit_out = self.vit(images).last_hidden_state
@@ -148,14 +169,12 @@ class GemmaDinoImageCaptioner(nn.Module):
         #convert for Language model
         image_embed = self.adapter(vit_selected)
 
-        boi = (self.gemma.get_input_embeddings()(torch.tensor([self.gemma_tokenizer.boi_token_id], device=device))).unsqueeze(0).expand(image_embed.shape[0], 1, image_embed.shape[2])
-        eoi = (self.gemma.get_input_embeddings()(torch.tensor([self.gemma_tokenizer.eoi_token_id], device=device))).unsqueeze(0).expand(image_embed.shape[0], 1, image_embed.shape[2])
+        boi = self._boi_embed.expand(image_embed.shape[0], 1, image_embed.shape[2])
+        eoi = self._eoi_embed.expand(image_embed.shape[0], 1, image_embed.shape[2])
         
         image_embed = torch.cat([boi, image_embed, eoi], dim=1)
 
-        # Build BOS embedding and prepend to image embeddings; use inputs_embeds-only API
-        bos_id = torch.tensor([self.gemma_tokenizer.bos_token_id], device=device)
-        bos_embed = self.gemma.get_input_embeddings()(bos_id).unsqueeze(0).expand(image_embed.shape[0], 1, image_embed.shape[2])
+        bos_embed = self._bos_embed.expand(image_embed.shape[0], 1, image_embed.shape[2])
         seq_embeds = torch.cat([bos_embed, image_embed], dim=1)
         attention_mask = torch.ones(seq_embeds.shape[0], seq_embeds.shape[1], dtype=torch.long, device=device)
 

@@ -11,13 +11,12 @@ wheels/
 
 
 # dirs
-notebooks/vit/
-notebooks/gemma/
+notebooks/
 wandb/
 
 #notebooks
-notebooks/DL_project_experiment_1.ipynb
-notebooks/experiment-1.ipynb
+
+
 
 #scripts
 scripts/wandb_project_init.py

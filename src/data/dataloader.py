@@ -38,14 +38,17 @@ class CocoCaptions(torch.utils.data.Dataset):
         else:
             caption = caps[self.caption_index]
 
-        image = self.vit_processor(image, return_tensors="pt")["pixel_values"]
+        image = self.vit_processor(image, return_tensors="pt")["pixel_values"].squeeze(0)
 
         return image, caption
 
 
 def coco_collate(batch):
     images, captions = zip(*batch)
-    return torch.stack(images), list(captions)
+    return {
+        "images":torch.stack(images), 
+        "captions":list(captions)
+    }
 
 
 def make_coco_dataloader(

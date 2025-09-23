@@ -15,7 +15,7 @@ class LitCaptioner(pl.LightningModule):
         self.optimizer_cfg = optimizer_cfg
 
     def training_step(self, batch, batch_idx: int):
-        images, captions = batch  #  coco_collate: (list[PIL.Image], list[str])
+        images, captions = batch["images"], batch["captions"]  
         out = self.model(images, captions) 
         loss = out.loss if hasattr(out, "loss") else out["loss"]
 
@@ -24,9 +24,9 @@ class LitCaptioner(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx: int):
-        images, captions = batch
+        images, captions = batch["images"], batch["captions"]
         out = self.model(images, captions)
-        val_loss = out.loss if hasattr(out, "loss") else len(images)
+        val_loss = out.loss if hasattr(out, "loss") else out["loss"]
 
         bsz = images.shape[0]
         self.log("val/loss", val_loss, prog_bar=True, on_epoch=True, batch_size=bsz)

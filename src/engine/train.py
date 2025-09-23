@@ -34,6 +34,7 @@ def main(cfg: DictConfig):
         logger = WandbLogger(
             project=cfg.logger.wandb.project,
             name=cfg.logger.wandb.run_name,
+            group=cfg.logger.wandb.group,
             save_dir=cfg.env.output_dir,
             log_model=False,
         )
