@@ -13,6 +13,9 @@ wheels/
 # dirs
 notebooks/
 wandb/
+experiments/
+tests/
+data/
 
 #notebooks
 
@@ -21,6 +24,3 @@ wandb/
 #scripts
 scripts/wandb_project_init.py
 
-#models and data
-experiments/
-tests/lightning_logs
