@@ -24,7 +24,7 @@ https://wandb.ai/divyanshukla/DinoGemmaCaptioner/reports/Best-Runs-25-9-25--Vmll
 
 #### Dataset:
 coco-captions-train/validation/test huggingface: [train](https://huggingface.co/datasets/Multimodal-Fatima/COCO_captions_train), [validation](https://huggingface.co/datasets/Multimodal-Fatima/COCO_captions_validation)
-each image has 5 captions, and because LLaVA used a 535K subset of CC3M for 1 epoch, and coco_captions have 113K samples, i am doing 5 epochs with random caption selection for an equivalent effective train set size.
+each image has 5 captions, and because LLaVA used a 535K subset of CC3M for 1 epoch, and coco_captions have 113K samples, i am doing 5 epochs with random caption selection for an equivalent effective train set size.  (4194 steps at batch size 8 and grad_step_acuumulate 16 )
 * src/data/dataloader.py contains dataloader that returns a tensor of image and String of caption
 * src/data/dataloader.py contains coco_collate function that returns a tensor of batched images and a list of String captions.
 
