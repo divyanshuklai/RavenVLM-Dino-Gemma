@@ -17,10 +17,10 @@ https://wandb.ai/divyanshukla/DinoGemmaCaptioner/reports/Best-Runs-25-9-25--Vmll
 
 ### Overview of the project:
 #### Model:
-LM used : Gemma-3-270M [huggingface](https://huggingface.co/google/gemma-3-270m)
-ViT Encoder used: DinoV3-ViT-S+ (29M) [huggingface](http://huggingface.co/facebook/dinov3-vith16plus-pretrain-lvd1689m)
-Adapter Arch : LN -> Linear(Vit_dim, Gemma_dim) -> GELU -> Linear(Gemma_dim, Gemma_Dim)
-Model definition : src/models/caption_modelling.py
+* LM used : Gemma-3-270M [huggingface](https://huggingface.co/google/gemma-3-270m)
+* ViT Encoder used: DinoV3-ViT-S+ (29M) [huggingface](http://huggingface.co/facebook/dinov3-vith16plus-pretrain-lvd1689m)
+* Adapter Arch : LN -> Linear(Vit_dim, Gemma_dim) -> GELU -> Linear(Gemma_dim, Gemma_Dim)
+* Model definition : src/models/caption_modelling.py
 
 #### Dataset:
 coco-captions-train/validation/test huggingface: [train](https://huggingface.co/datasets/Multimodal-Fatima/COCO_captions_train), [validation](https://huggingface.co/datasets/Multimodal-Fatima/COCO_captions_validation)
