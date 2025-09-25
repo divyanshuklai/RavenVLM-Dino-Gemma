@@ -7,7 +7,8 @@ class GemmaDinoImageCaptioner(nn.Module):
     def __init__(self,
                  gemma_id="google/gemma-3-270m",
                  vit_id="facebook/dinov3-vits16plus-pretrain-lvd1689m",
-                 max_caption_length=64, 
+                 prompt="In this Image: ",
+                 max_caption_length=128, 
                  include_cls=True,
                  include_registers=False, 
                  include_patches=False,
@@ -30,7 +31,9 @@ class GemmaDinoImageCaptioner(nn.Module):
         self.include_registers = include_registers
         self.include_patches = include_patches
 
+        self.prompt = prompt
         self.max_caption_length = max_caption_length
+        
 
         self.gemma_tokenizer = AutoTokenizer.from_pretrained(gemma_id)
 
@@ -62,9 +65,9 @@ class GemmaDinoImageCaptioner(nn.Module):
         for parameter in self.gemma.parameters():
             parameter.requires_grad = not freeze_gemma
         for parameter in self.adapter.parameters():
-            parameter.requires_grad = True
+            parameter.requires_grad = True                             
 
-
+        self.register_buffer("_embedded_prompt", None, persistent=False)
         self.register_buffer("_boi_embed", None, persistent=False)
         self.register_buffer("_eoi_embed", None, persistent=False)
         self.register_buffer("_bos_embed", None, persistent=False)
@@ -100,7 +103,9 @@ class GemmaDinoImageCaptioner(nn.Module):
             self._eoi_embed = (self.gemma.get_input_embeddings()(torch.tensor([self.gemma_tokenizer.eoi_token_id], device=device, dtype=torch.long))).unsqueeze(0)
         if self._bos_embed is None:
             self._bos_embed = (self.gemma.get_input_embeddings()(torch.tensor([self.gemma_tokenizer.bos_token_id], device=device, dtype=torch.long))).unsqueeze(0)
-        
+        if self._embedded_prompt is None:
+            self._embedded_prompt = (self.gemma.get_input_embeddings()(self.gemma_tokenizer(self.prompt, return_tensors="pt").to(device).input_ids))
+
 
         with torch.no_grad():
             vit_out = self.vit(images).last_hidden_state
@@ -110,14 +115,15 @@ class GemmaDinoImageCaptioner(nn.Module):
         #convert for Language model
         image_embed = self.adapter(vit_selected)
 
-        boi = self._boi_embed.to(device).expand(image_embed.shape[0], 1, image_embed.shape[2])
-        eoi = self._eoi_embed.to(device).expand(image_embed.shape[0], 1, image_embed.shape[2])
+        boi = self._boi_embed.expand(image_embed.shape[0], 1, image_embed.shape[2])
+        eoi = self._eoi_embed.expand(image_embed.shape[0], 1, image_embed.shape[2])
         image_embed = torch.cat([boi, image_embed, eoi], dim=1)
 
-        
-        bos_embed = self._bos_embed.to(device).expand(image_embed.shape[0], 1, image_embed.shape[2])
+        # append <bos> <<prompt>> to <boi> <img>...<img> <eoi> 
+        bos_embed = self._bos_embed.expand(image_embed.shape[0], 1, image_embed.shape[2])
+        prompt_embed = self._embedded_prompt.expand(image_embed.shape[0], -1, image_embed.shape[2])
 
-        image_embed = torch.cat([bos_embed, image_embed], dim=1)
+        image_embed = torch.cat([image_embed, bos_embed, prompt_embed], dim=1)
 
         #tokenize captions
         caps = self.gemma_tokenizer(captions, 
@@ -160,7 +166,10 @@ class GemmaDinoImageCaptioner(nn.Module):
             self._eoi_embed = (self.gemma.get_input_embeddings()(torch.tensor([self.gemma_tokenizer.eoi_token_id], device=device, dtype=torch.long))).unsqueeze(0)
         if self._bos_embed is None:
             self._bos_embed = (self.gemma.get_input_embeddings()(torch.tensor([self.gemma_tokenizer.bos_token_id], device=device, dtype=torch.long))).unsqueeze(0)
-        
+        if self._embedded_prompt is None:
+            self._embedded_prompt = (self.gemma.get_input_embeddings()(self.gemma_tokenizer(self.prompt, return_tensors="pt").to(device).input_ids))
+
+
         with torch.no_grad():
             vit_out = self.vit(images).last_hidden_state
 
@@ -175,7 +184,9 @@ class GemmaDinoImageCaptioner(nn.Module):
         image_embed = torch.cat([boi, image_embed, eoi], dim=1)
 
         bos_embed = self._bos_embed.expand(image_embed.shape[0], 1, image_embed.shape[2])
-        seq_embeds = torch.cat([bos_embed, image_embed], dim=1)
+        prompt_embed = self._embedded_prompt.expand(image_embed.shape[0], 1, image_embed.shape[2])
+
+        seq_embeds = torch.cat([image_embed, bos_embed, prompt_embed], dim=1)
         attention_mask = torch.ones(seq_embeds.shape[0], seq_embeds.shape[1], dtype=torch.long, device=device)
 
         gen = self.gemma.generate(
@@ -187,6 +198,8 @@ class GemmaDinoImageCaptioner(nn.Module):
             eos_token_id=self.gemma_tokenizer.eos_token_id,
             pad_token_id=self.gemma_tokenizer.pad_token_id,
         )
+
+        gen = gen[:, attention_mask.shape[1]:]
 
         result = self.gemma_tokenizer.batch_decode(gen, skip_special_tokens=True)
 

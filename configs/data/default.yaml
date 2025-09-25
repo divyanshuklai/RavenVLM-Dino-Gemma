@@ -1,6 +1,8 @@
 train_split: train
 val_split: validation
 num_workers: 2
+persistent_workers: true
+prefetch_factor: 2
 batch_size: 2
 val_batch_size: 2
 shuffle: true

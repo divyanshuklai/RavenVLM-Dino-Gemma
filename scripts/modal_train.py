@@ -62,9 +62,9 @@ def _to_hydra_value(v):
 
 @app.function(
     image=image,
-    gpu="T4",
+    gpu="L40S",
     volumes={"/cache/hf": HF_VOL, "/workspace/experiments": EXP_VOL},
-    timeout=60 * 60 * 6,
+    timeout= 60 * 60 * 10,
     secrets=[modal.Secret.from_name("huggingface-secret"), modal.Secret.from_name("wandb-secret")]
 )
 def train_one(overrides):
@@ -93,21 +93,24 @@ def train_one(overrides):
 def sweep():
 
     common_ovr = {
-        "trainer.max_steps":10_000,
-        "trainer.val_check_interval":5_000,
+        "trainer.max_epochs":5,
+        "trainer.val_check_interval":1_000,
+        "trainer.ckpt_every_n_train_steps":1_000,
         "logger.wandb.enabled":True,
         "trainer.log_every_n_steps":5,
         "trainer.amp":False,
         "data.num_workers":8,
+        "data.val_batch_size":16,
     }
 
     grid = {
-        "optimizer.lr": [5e-5],
-        "data.batch_size": [4],
-        "model.include_patches": [False],
-        "model.include_registers":[True, False],
+        "optimizer.lr": [2e-3, 1e-5],
+        "data.batch_size": [16],
+        "trainer.accumulate_grad_batches":[8],
+        "model.include_patches": [True],
+        "model.freeze_gemma":[False, True],
+        "model.include_registers":[False],
         "trainer.gradient_clip_val":[1.0],
-
     }
 
     from datetime import datetime

@@ -13,6 +13,11 @@ class LitCaptioner(pl.LightningModule):
         super().__init__()
         self.model = model
         self.optimizer_cfg = optimizer_cfg
+    
+    def transfer_batch_to_device(self, batch, device, dataloader_idx: int):
+        if isinstance(batch, dict) and "images" in batch:
+            batch["images"] = batch["images"].to(device, non_blocking=True)
+        return batch
 
     def training_step(self, batch, batch_idx: int):
         images, captions = batch["images"], batch["captions"]  
@@ -58,6 +63,7 @@ def _build_model(cfg: DictConfig) -> nn.Module:
     return GemmaDinoImageCaptioner(
         gemma_id=cfg.model.gemma_id,
         vit_id=cfg.model.vit_id,
+        prompt=cfg.model.prompt,
         include_cls=cfg.model.include_cls,
         include_registers=cfg.model.include_registers,
         include_patches=cfg.model.include_patches,
@@ -78,6 +84,9 @@ def _get_dataloaders(cfg: DictConfig):
         num_workers=cfg.data.num_workers,
         pin_memory=cfg.data.pin_memory,
         cache_dir=cfg.env.hf_home or None,
+        persistent_workers=cfg.data.persistent_workers,
+        prefetch_factor=cfg.data.prefetch_factor,
+        pin_memory_device="cuda",
     )
     val_loader = None
     if cfg.data.use_val:
@@ -92,5 +101,8 @@ def _get_dataloaders(cfg: DictConfig):
             num_workers=cfg.data.num_workers,
             pin_memory=cfg.data.pin_memory,
             cache_dir=cfg.env.hf_home or None,
+            persistent_workers=cfg.data.persistent_workers,
+            prefetch_factor=cfg.data.prefetch_factor,
+            pin_memory_device="cuda",
         )
     return train_loader, val_loader

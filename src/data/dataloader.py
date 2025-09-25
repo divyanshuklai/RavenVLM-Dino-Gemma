@@ -62,6 +62,9 @@ def make_coco_dataloader(
     num_workers=0,
     pin_memory=False,
     cache_dir=None,
+    persistent_workers=False,
+    prefetch_factor=2,
+    pin_memory_device="",
 ):
     """
     Construct a Dataloader for Coco captions datasets using hf:Multimodal-Fatima/COCO_captions_{split}.
@@ -71,6 +74,15 @@ def make_coco_dataloader(
     dataset = CocoCaptions(gemma_id, vit_id, split=split, caption_index=caption_index, seed=seed, cache_dir=cache_dir)
     if shuffle is None:
         shuffle = split == "train"
+
+    loader_kwargs = {}
+    if num_workers and num_workers > 0:
+        loader_kwargs["persistent_workers"] = bool(persistent_workers)
+        loader_kwargs["prefetch_factor"] = int(prefetch_factor)
+
+    if pin_memory_device:
+        loader_kwargs["pin_memory_device"] = str(pin_memory_device)
+
     return torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
@@ -78,4 +90,5 @@ def make_coco_dataloader(
         num_workers=num_workers,
         pin_memory=pin_memory,
         collate_fn=coco_collate,
+        **loader_kwargs,
     )
