@@ -1,0 +1,19 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# files
+models/dino_model_urls.py
+
+# dirs
+/notebooks
+/experiments
+/scripts
+/cache
