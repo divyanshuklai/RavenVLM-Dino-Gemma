@@ -22,10 +22,10 @@ class COCOCaptionsDatasetRAW(torch.utils.data.Dataset):
             self.rng = random.Random(seed)
 
         self.transform = transform
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.ds)
     
-    def __getitem__(self, index):
+    def __getitem__(self, index) -> tuple[int, torch.Tensor, list[str]]:
         item = self.ds[index]
         id = item["id"]
         image = item["image"]

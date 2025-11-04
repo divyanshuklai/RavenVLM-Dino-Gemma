@@ -10,7 +10,7 @@ def build_vit_and_transform(
     do_resize = False,
     resize_size = 224,
     device = "cpu",
-):
+) -> tuple[torch.nn.Module, v2.Transform]:
     """
     Build a DinoV3 and its preprocessing transform.
 
@@ -38,14 +38,13 @@ def build_vit_and_transform(
     )
 
     model.eval()
-    model = model.to(device)
+    model = model.to(device, non_blocking=True)
     transform = make_transform(do_resize, resize_size)
-
     return model, transform
 
 
 def make_transform(do_resize : bool, resize_size : int):
-    to_tensor = v2.ToTensor()
+    to_tensor = v2.ToImage()
     resize = v2.Resize((resize_size, resize_size), antialias=True) if do_resize else v2.Identity()
     to_float = v2.ToDtype(torch.float32, scale=True)
     normalize = v2.Normalize(
