@@ -14,5 +14,5 @@ def main():
         patch = sample["patch"]
         captions = sample["captions"]
         print(f"Loaded {len(cls)} embeddings with shape {cls.shape}")
-        print(f"Sample caption: {captions[0]}")
+        print(f"Sample caption: {[caption for caption in captions]}")
         print(f"Patch embeddings shape {patch.shape}")

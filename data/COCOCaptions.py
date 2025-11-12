@@ -3,6 +3,10 @@ import torch
 from torchvision.transforms import v2
 from datasets import load_dataset
 
+class COCOCaptionsDiNOV3ViTSPlusEmbed(torch.utils.data.Dataset):
+    def __init__(self, split : str, same_size : bool = True, caption_index : None | int = None, seed = None, cache_dir = None):
+        super().__init__()
+
 class COCOCaptionsDatasetRAW(torch.utils.data.Dataset):
     def __init__(self, split : str, transform : v2.Transform, all_captions : bool = True, caption_index: None | int =None, 
                  seed=None, cache_dir=None):
@@ -40,17 +44,28 @@ class COCOCaptionsDatasetRAW(torch.utils.data.Dataset):
         
         return id, image, caption
     
-def coco_collate_raw(batch):
-    ids, images, captions = zip(*batch)
-    return {
-        "ids":list(ids),
-        "images":list(images),
-        "captions":list(captions)
-    }
+def make_coco_raw_collate_fn(same_size=False):    
+    def coco_collate_raw_var_size(batch):
+        ids, images, captions = zip(*batch)
+        return {
+            "ids":list(ids),
+            "images":list(images),
+            "captions":list(captions)
+        }
+    def coco_collate_raw_same_size(batch):
+        ids, images, captions = zip(*batch)
+        return {
+            "ids":list(ids),
+            "images":torch.stack(images),
+            "captions":list(captions)
+        }
+    collate_fn = coco_collate_raw_same_size if same_size else coco_collate_raw_var_size
+    return collate_fn
 
 def make_coco_raw_dataloader(
     split: str = "train",
     transform : v2.Transform = v2.Identity(),
+    do_resize : bool = False,
     all_captions : bool = True,
     caption_index: int | None = None,
     seed: int = 42,
@@ -65,8 +80,6 @@ def make_coco_raw_dataloader(
     """
     Build a DataLoader for the RAW COCO captions dataset.
     """
-    if shuffle is None:
-        shuffle = (split == "train")
 
     dataset = COCOCaptionsDatasetRAW(
         split=split,
@@ -97,7 +110,7 @@ def make_coco_raw_dataloader(
         pin_memory=pin_memory,
         drop_last=drop_last,
         persistent_workers=persistent_workers if num_workers > 0 else False,
-        collate_fn=coco_collate_raw,
+        collate_fn=make_coco_raw_collate_fn(same_size=do_resize),
         worker_init_fn=_seed_worker if num_workers > 0 else None,
         generator=generator,
     )

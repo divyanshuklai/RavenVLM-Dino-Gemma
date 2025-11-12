@@ -11,9 +11,9 @@ wheels/
 
 # files
 models/dino_model_urls.py
+shard_structure.json
 
 # dirs
 /notebooks
 /experiments
-/scripts
 /cache
