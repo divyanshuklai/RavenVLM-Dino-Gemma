@@ -11,6 +11,8 @@ from typing import List, Dict
 from pathlib import Path
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
+import itertools
+from dataclasses import dataclass
 
 # Import from our project files
 from models.config import TrainConfig
@@ -28,6 +30,20 @@ from pycocoevalcap.tokenizer.ptbtokenizer import PTBTokenizer
 
 
 from models.config import CACHE_PATH
+
+@dataclass
+class ShortTrainConfig(TrainConfig):
+    stage1_epochs_same: int = 1
+    stage1_epochs_diff: int = 1
+    stage2_epochs_same: int = 1
+    stage2_epochs_diff: int = 1
+    wandb_log_every_n_steps: int = 1
+    validation_every_n_steps_ratio: float = 0.5
+    num_workers: int = 0 # For easier debugging
+    # Limit batches for a very quick run
+    max_train_batches_per_epoch: int = 2
+    max_val_batches: int = 2
+
 
 # --- Modal Setup ---
 
@@ -102,7 +118,7 @@ def run_validation_stage1(model: QFormerForPretraining, val_loader: DataLoader, 
     model.eval()
     total_loss, total_itc_loss, total_itm_loss, total_itg_loss = 0, 0, 0, 0
     
-    for batch in tqdm(val_loader, desc="Validation Stage 1", leave=False):
+    for batch in tqdm(itertools.islice(val_loader, config.max_val_batches), desc="Validation Stage 1", leave=False):
         patch_embeds, _, text_ids, text_mask, _, patch_attention_mask = batch
         patch_embeds, text_ids, text_mask, patch_attention_mask = patch_embeds.to(device, dtype=torch.bfloat16), text_ids.to(device), text_mask.to(device), patch_attention_mask.to(device, dtype=torch.bool)        
         losses = model(vit_embeds=patch_embeds, text_input_ids=text_ids, text_attention_mask=text_mask, patch_attention_mask=patch_attention_mask)
@@ -133,7 +149,7 @@ def run_validation_stage2(vlm: VLMQFormer, tokenizer, val_loader: DataLoader, de
     sample_idx = 0
     total_loss = 0
 
-    for batch in tqdm(val_loader, desc="Validation Stage 2", leave=False):
+    for batch in tqdm(itertools.islice(val_loader, config.max_val_batches), desc="Validation Stage 2", leave=False):
         patch_embeds, _, text_ids, _, raw_captions_batch, patch_attention_mask = batch
         patch_embeds, text_ids, patch_attention_mask = patch_embeds.to(device, dtype=torch.bfloat16), text_ids.to(device), patch_attention_mask.to(device, dtype=torch.bool)
         
@@ -193,7 +209,7 @@ def train(config: TrainConfig):
     qformer_for_pretraining.train()
     for loader, num_epochs in [(train_loader_same, config.stage1_epochs_same), (train_loader_diff, config.stage1_epochs_diff)]:
         for epoch in range(num_epochs):
-            for batch in tqdm(loader, desc=f"Stage 1 Epoch {epoch+1}/{num_epochs}", leave=False):
+            for batch in tqdm(itertools.islice(loader, config.max_train_batches_per_epoch), desc=f"Stage 1 Epoch {epoch+1}/{num_epochs}", leave=False):
                 patch_embeds, _, text_ids, text_mask, _, patch_attention_mask = batch
                 patch_embeds, text_ids, text_mask, patch_attention_mask = patch_embeds.to(device, dtype=torch.bfloat16), text_ids.to(device), text_mask.to(device), patch_attention_mask.to(device, dtype=torch.bool)
                 
@@ -239,7 +255,7 @@ def train(config: TrainConfig):
     vlm.train()
     for loader, num_epochs in [(train_loader_same, config.stage2_epochs_same), (train_loader_diff, config.stage2_epochs_diff)]:
         for epoch in range(num_epochs):
-            for batch in tqdm(loader, desc=f"Stage 2 Epoch {epoch+1}/{num_epochs}", leave=False):
+            for batch in tqdm(itertools.islice(loader, config.max_train_batches_per_epoch), desc=f"Stage 2 Epoch {epoch+1}/{num_epochs}", leave=False):
                 patch_embeds, _, text_ids, _, _, patch_attention_mask = batch
                 patch_embeds, text_ids, patch_attention_mask = patch_embeds.to(device, dtype=torch.bfloat16), text_ids.to(device), patch_attention_mask.to(device, dtype=torch.bool)
                 
@@ -273,5 +289,5 @@ def train(config: TrainConfig):
 def main():
     """Local entrypoint to run the training on Modal."""
     print("Starting Modal training job...")
-    config = TrainConfig()
+    config = ShortTrainConfig()
     train.remote(config)

@@ -1,16 +1,13 @@
-"""
-NOTE : MOVE THIS SCRIPT TO PROJECT ROOT TO USE
-
-This script converts the COCO datasets to vision encodings using DINOV3-VITS+/16 on modal
-1. downloads and saves datasets from hf to modal volume cache ./datasets/COCO-Captions-raw
-2. uses the train, test, and validation datasets under COCO-Captions-raw to build datasets for each split under ./datasets/COCO-captions-vits16plus-embed/
-"""
 import os
 import modal
+import h5py
+import numpy as np
+from tqdm.auto import tqdm
+import torch
 
+# --- Modal Setup ---
 
 CACHE_VOL = modal.Volume.from_name("cache")
-
 
 image = (
     modal.Image.debian_slim(python_version="3.13")
@@ -20,14 +17,12 @@ image = (
 
 project_root = os.path.dirname(__file__)
 
+# Add project directories to the image
 image = image.add_local_dir(
-    local_path = f"{project_root}/models",
-    remote_path = "/root/models"
+    local_path=f"{project_root}/../models", remote_path="/root/models"
 )
-
 image = image.add_local_dir(
-    local_path= f"{project_root}/data",
-    remote_path= "/root/data",
+    local_path=f"{project_root}/../data", remote_path="/root/data"
 )
 
 app = modal.App("VISION-DATASET-ENCODER")
@@ -55,7 +50,7 @@ def download_dataset_and_encode(
     )
     # vision_encoder.compile()
     # init dataloader
-    from data.COCOCaptions import COCOCaptionsDatasetRAW, make_coco_raw_collate_fn
+    from data.COCOCaptions_raw import COCOCaptionsDatasetRAW, make_coco_raw_collate_fn
 
     dataset = COCOCaptionsDatasetRAW(
         split=split,

@@ -667,16 +667,22 @@ class GemmaTokenizer:
         tok_file = Path(tokenizer_file_path)
         self._tok = Tokenizer.from_file(str(tok_file))
         # Attempt to identify EOS and padding tokens
-        eos_token = "<end_of_turn>"
-        self.pad_token_id = eos_token
-        self.eos_token_id = eos_token
+        self.eos_token_id = self._tok.token_to_id("<end_of_turn>")
+        self.bos_token_id = self._tok.token_to_id("<start_of_turn>")
+        # Common practice to use EOS as PAD for Gemma-like models
+        self.pad_token_id = self.eos_token_id
 
-    def encode(self, text: str) -> list[int]:
-        return self._tok.encode(text).ids
+    def get_vocab_size(self) -> int:
+        return self._tok.get_vocab_size()
+
+    def encode(self, text: str, add_special_tokens: bool = True) -> list[int]:
+        return self._tok.encode(text, add_special_tokens=add_special_tokens).ids
 
     def decode(self, ids: list[int]) -> str:
         return self._tok.decode(ids, skip_special_tokens=False)
 
+    def batch_decode(self, sequences: list[list[int]], skip_special_tokens: bool = True) -> list[str]:
+        return self._tok.decode_batch(sequences, skip_special_tokens=skip_special_tokens)
 
 
 ######################################
