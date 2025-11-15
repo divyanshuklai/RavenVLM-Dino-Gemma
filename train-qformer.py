@@ -39,6 +39,7 @@ cache_vol = modal.Volume.from_name("cache")
 # Define the Modal Image
 image = (
     modal.Image.debian_slim(python_version="3.13") # Using a common stable version
+    .apt_install("default-jdk")
     .pip_install_from_pyproject("pyproject.toml")
     .add_local_dir("data", remote_path="/root/data")
     .add_local_dir("evals", remote_path="/root/evals")
@@ -274,4 +275,6 @@ def main():
     """Local entrypoint to run the training on Modal."""
     print("Starting Modal training job...")
     config = TrainConfig()
+    config.qformer_hidden_dim = 640
+    config.qformer_num_layers = 12
     train.remote(config)
